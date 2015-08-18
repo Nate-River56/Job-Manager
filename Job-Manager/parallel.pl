@@ -107,19 +107,19 @@ EOF
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat);
 
 GetOptions(
-'--process=i'=>\$par{'var'}{'process'}, 							#物理コア数
-'--choose=s'=>\$par{'str'}{'variable'},								#シミュレーションの変数の種類
-'--start=f'=>\$par{'var'}{'start'},									#変数の始まる値
-'--end=f'=>\$par{'var'}{'end'},										#変数の終わる値
-'--interval=f'=>\$par{'var'}{'interval'},							#変数のインターバル
-'--seed=i{1,}'=>\@seed,												#変化させるseedの配列
-'--bottom=i{1,}'=>\@bottom,											#変化させるbottomの長さの配列
-'--help|?'=>\$par{'bool'}{'gethelp'}, 								#このスクリプトの詳細を表示
-'--dry-run'=>\$par{'bool'}{'dryrun'},								#試しに走らせてみる
-'--dump'=>\$par{'bool'}{'printpar'},								#入力された変数をYAML形式で出力
-'--nonsol'=>\$par{'bool'}{'nonsol'},								#溶媒の効果の存在の有無
-'--correlation'=>\$par{'bool'}{'correlation'},						#溶媒と高分子鎖の相関の計算の有無
-'--consumer-key=s'=>\$par{'twitter_keys'}{'consumer_key'},			#
+'--process=i'=>\$par{'var'}{'process'},
+'--choose=s'=>\$par{'str'}{'variable'},
+'--start=f'=>\$par{'var'}{'start'},
+'--end=f'=>\$par{'var'}{'end'},
+'--interval=f'=>\$par{'var'}{'interval'},
+'--seed=i{1,}'=>\@seed,
+'--bottom=i{1,}'=>\@bottom,
+'--help|?'=>\$par{'bool'}{'gethelp'},
+'--dry-run'=>\$par{'bool'}{'dryrun'},
+'--dump'=>\$par{'bool'}{'printpar'},
+'--nonsol'=>\$par{'bool'}{'nonsol'},
+'--correlation'=>\$par{'bool'}{'correlation'},						
+'--consumer-key=s'=>\$par{'twitter_keys'}{'consumer_key'},
 '--consumer-key-secret=s'=>\$par{'twitter_keys'}{'consumer_secret'},
 '--token=s'=>\$par{'twitter_keys'}{'token'},
 '--token-secret=s'=>\$par{'twitter_keys'}{'token_secret'},
@@ -226,7 +226,7 @@ sub test{
         foreach my $bottom (@bottom){
             if($par{'bool'}{'nonsol'}==TRUE){
                 if (my $pid=$pm_dr->start) {
-                    Time::HiRes::sleep(0.5);  # fork に時間がかかることを想定
+                    Time::HiRes::sleep(0.5);
                     next;
                 }
                 
@@ -241,7 +241,7 @@ sub test{
             }else{
                 for(my $iter=$par{'var'}{'start'};$iter<=$par{'var'}{'end'};$iter=sprintf("%.2f",$iter+$par{'var'}{'interval'})){
                     if (my $pid=$pm_dr->start) {
-                        Time::HiRes::sleep(0.2);  # fork に時間がかかることを想定
+                        Time::HiRes::sleep(0.2);
                         next;
                     }
                     
@@ -309,7 +309,7 @@ sub spork{
         foreach my $bottom (@bottom){
             if($par{'bool'}{'nonsol'}==TRUE){
                 if (my $pid=$pm->start) {
-                    Time::HiRes::sleep(0.5);  # fork に時間がかかることを想定
+                    Time::HiRes::sleep(0.5);
                     next;
                 }
                 
@@ -326,7 +326,7 @@ sub spork{
             }else{
                 for(my $iter=$par{'var'}{'start'};$iter<=$par{'var'}{'end'};$iter=sprintf("%.2f",$iter+$par{'var'}{'interval'})){
                     if (my $pid=$pm->start) {
-                        Time::HiRes::sleep(0.2);  # fork に時間がかかることを想定
+                        Time::HiRes::sleep(0.2);
                         next;
                     }
                     
