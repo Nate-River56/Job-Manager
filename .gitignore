@@ -48,13 +48,7 @@ nytprof.out
 *.bs
 /_eumm/
 Job-Manager/Job-Manager.xcodeproj/project.xcworkspace/xcuserdata/nate.xcuserdatad/UserInterfaceState.xcuserstate
-
-Job-Manager/test.json
-
-Job-Manager/parallel.dump
-
-Job-Manager/0
-
 Job-Manager/Job-Manager.xcodeproj/xcuserdata/nate.xcuserdatad/xcschemes/Job-Manager.xcscheme
-
 Job-Manager/Job-Manager.xcodeproj/project.pbxproj
+
+*.json

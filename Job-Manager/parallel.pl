@@ -23,12 +23,15 @@ use open ":utf8";
 ### Pedantic
 use warnings;
 use strict;
+use Readonly;
+#use Test::More;
+#use B::Deparse;
 no warnings 'redefine';
 ###
 
 ### Bool value
-use constant TRUE=>1;
-use constant FALSE=>0;
+Readonly my $TRUE =>1;
+Readonly my $FALSE=>0;
 ###
 
 ### Other Modules
@@ -47,21 +50,8 @@ use Data::Dumper;
     package Data::Dumper;
     sub qquote{return shift;}
 }
-$Data::Dumper::Useperl=TRUE;
-###
-
-### Getting hostname
-
-###
-
-### Default Commandline Arguments
-my %par=(
-	"gethelp" => FALSE,
-	"read_json"=>FALSE,
-    "print_yaml" => FALSE,
-    "print_json" => FALSE,
-    "dryrun" => FALSE,
-);
+$Data::Dumper::Useperl=$TRUE;
+$Data::Dumper::Deparse=$TRUE;
 ###
 
 ### Default JSON value
@@ -80,25 +70,29 @@ my %json=(
 	twitter=>{
         consumer_key=>{
             value=>$ENV{'TWTR_CONS_KEY'},
-            comment=>"Twitter REST APIのコンシューマーキー",
+            comment=>"Twitter REST API 1.1のconsumer key",
         },
     	consumer_secret =>{
             value=>$ENV{'TWTR_CONS_SEC'},
-            comment=>"",
+            comment=>"Twitter REST API 1.1のconsumer secret",
         },
         token=>{
             value=>$ENV{'TWTR_TOKEN_KEY'},
-            comment=>"",
+            comment=>"Twitter REST API 1.1のtoken",
         },
         token_secret=>{
             value=>$ENV{'TWTR_TOKEN_SEC'},
-            comment=>"",
+            comment=>"Twitter REST API 1.1のtoken secret",
         },
 	},
 	simulation=>{
     	integer=>{
         	SL=>{
-            	value=>200,
+            	array=>[
+                	100,
+                	200,
+                	300,
+                ],
             	comment=>"高分子のセグメント数",
             },
             SN=>{
@@ -110,7 +104,7 @@ my %json=(
                 comment=>"Z方向の系の長さ",
             },
             M=>{
-                value=>[
+                array=>[
                 	20,
                 	30,
                 	40,
@@ -118,7 +112,7 @@ my %json=(
                 comment=>"xy方向の系の長さ",
             },
             seed=>{
-                value=>[
+                array=>[
                 	1,
                 	2,
                 	3,
@@ -133,42 +127,32 @@ my %json=(
     	},
     	float=>{
             J=>{
-                value=>0.00,
+                array=>[
+                	"0.00",
+                	"0.05",
+                	"0.10",
+                ],
                 comment=>"高分子モノマーと溶媒の相互作用の強さ",
             },
             K=>{
-                value=>0.00,
+                array=>[
+                	"0.00",
+                	"0.05",
+                	"0.10",
+                ],
                 comment=>"二成分溶媒間の相互作用の強さ",
-            },
-            start=>{
-                value=>0.00,
-                comment=>,"変化させるパラメータの初期値"
-            },
-            interval=>{
-                value=>0.05,
-                comment=>"変化させるパラメータの変化する値",
-            },
-            end=>{
-                value=>0.80,
-                comment=>"変化させるパラメータの終わりの値",
             },
     	},
         bool=>{
             nonsol=>{
-                value=>FALSE,
+                value=>$FALSE,
                 comment=>"溶媒のない条件でシミュレーションを行う.(true->1,false->0)",
             },
             correlation=>{
-                value=>FALSE,
+                value=>$FALSE,
                 comment=>"系の自己相関,相互相関について計算を行う.(true->1,false->0)",
             },
         },
-    	string=>{
-            choose_par=>{
-                value=>'J',
-                comment=>"変化させるパラメータ(J,K,M)",
-            },
-    	},
 	},
 );
 
@@ -181,47 +165,15 @@ Usage:
     perl $0 [options]
     
 Options:
-    --help       -h     :このスクリプトの詳細を表示
-    --read-json  -r		:JSON形式のファイルをパラメータとして入力する
-    --dry-run 	 -d     :試しに走らせてみる
-    --gen-json 	 -g		:JSON形式の入力用ファイルを作成する
-    --dump-yaml  -y     :入力された変数をYAML形式で出力,単体でdefaultのparameterの表示
-    --dump-json	 -j		:入力された変数をJSON形式で出力,単体でdefaultのparameterの表示
+    --help       -h	:このスクリプトの詳細を表示
+    --read       -r	:JSON形式のファイルをパラメータとして入力する
+    --dry-run 	 -d	:試しに走らせてみる
+    --gen        -g	:JSON形式の入力用ファイルを作成する
+    --dump       -p	:各種パラメーターをPerl Hash形式で出力
+    --dir        -c	:ディレクトリを設定する
     
 EOF
     return $help_doc;
-}
-###
-
-### Getopt
-GetOptions(
-#'--help|?|h'=>\$par{'gethelp'},
-	'--help|?|h'=>\&show_help,
-	'--read-json|r=s'=>\$par{'read_json'},
-	'--dry-run|d'=>\$par{'dryrun'},
-	'--dump-yaml|y'=>\$par{'print_yaml'},
-	'--dump-json|j'=>\$par{'print_json'},
-) or die $!;
-###
-
-### Twitter 
-our $twtr = Net::Twitter->new(
-traits => ['API::RESTv1_1'],
-consumer_key => $par{'twitter_keys'}{'consumer_key'},
-consumer_secret => $par{'twitter_keys'}{'consumer_secret'},
-access_token =>$par{'twitter_keys'}{'token'},
-access_token_secret =>$par{'twitter_keys'}{'token_secret'},
-SSL => TRUE,
-);
-
-sub tweet{
-    my $tweet=shift; # Equal to $_[0]
-    my $update=$twtr->update($tweet);
-}
-
-sub timeline{
-    my $tl=$twtr->home_timeline();
-    return $tl;
 }
 ###
 
@@ -236,18 +188,18 @@ sub srcwd{
 }
 ###
 
-### Gen-JSON
-sub get_json{
-    my @hashref=shift;
-    
-    my $json=JSON::XS->new->pretty(1)->encode(\@hashref);
-    
-    return $json;
-}
-
+### Generate JSON
 sub gen_json{
     
-    my $file=shift||$par{'read_json'};
+    sub get_json{
+        my @hashref=shift;
+        
+        my $json=JSON::XS->new->pretty(1)->encode(\@hashref);
+        
+        return $json;
+    }
+    
+    my $file=shift;
     
     push(my @hashref,shift);
     
@@ -260,23 +212,24 @@ sub gen_json{
 ###
 
 ### Read
-sub get_content {
+sub json2hash{
     
-    my $file = shift;
-    
-    my $fh;
-    my $content;
-    
-    if(defined $file){
-    	open($fh, '<', $file) or die "Can't open file \"$file\": $!";
-        $content = do { local $/; <$fh> };
-        close $fh;
+    sub get_content {
+        
+        my $file = shift;
+        
+        my $fh;
+        my $content;
+        
+        if(defined $file){
+            open($fh, '<', $file) or die "Can't open file \"$file\": $!";
+            $content = do { local $/; <$fh> };
+            close $fh;
+        }
+        
+        return $content;
     }
     
-    return $content;
-}
-
-sub json2hash{
     my $file = shift;
     
     my $json=get_content($file);
@@ -289,21 +242,10 @@ sub json2hash{
 ###
 
 ### Dump
-sub dump_yaml{
-    use YAML::XS;
-    
-    my %par=shift;
-    print STDOUT YAML::XS::Dump %par;
-}
-
-sub dump_json{
-    my @hashref=shift;
-    print STDOUT get_json(@hashref);
-}
-
 sub dump_hash{
-    my @hashref=shift;
-    print STDOUT Dumper(%{$hashref[0]});
+    my @hashref=shift||\%json;
+    my %hash=%{$hashref[0]};
+    print STDOUT Dumper(@hashref);
 }
 ###
 
@@ -331,6 +273,7 @@ sub hash_assign{
 }
 ###
 
+### System environment
 sub count_core(){
     
     my $core_num;
@@ -346,9 +289,7 @@ sub count_core(){
         
         
     }elsif($osname=~/darwin/){
-        
         $core_num=`sysctl machdep.cpu.core_count|awk '{print \$2}'|tr -d '\\n'`;
-        
     }else{
         $core_num=-1;
     }
@@ -375,40 +316,27 @@ sub get_cpu_name(){
     return $cpu_name;
     
 }
+###
 
 ### Generate commandline
+
 sub gen_com{
     
-    my @hashref=shift;
-    my %hash=%{$hashref[0]};
+    #my @hashref=shift;
+    #my %hash=%{$hashref[0]};
     
-    my $variable=shift;
+    my $J=shift||'0.00';
+    my $K=shift||'0.00';
+    
     my $bottom=shift;
+    my $sl=shift;
     my $seed=shift;
-    my $choose=$hash{'simulation'}{'string'}{'choose_par'}{'value'};
     
-    
-    
-    my $exec=$hash{'environment'}{'executable'};
-    my $m=$par{'var'}{'botton_length'};
-    my $sn=$par{'var'}{'grafting_point'};
-    my $mcs=$par{'var'}{'observe_mcs'};
-    my $mz=$par{'var'}{'z_length'};
-    my $sl=$par{'var'}{'segment_number'};
-    my $J='0.00';
-    my $K='0.00';
-    
-    
-    if($choose eq 'J'){
-        $J=$variable;
-        $K='0.00';
-    }elsif($choose eq 'K'){
-        $J='0.00';
-        $K=$variable;
-    }else{
-        $J=0.00;
-        $K=0.00;
-    }
+    my $exec=$json{'system'}{'program'}{'value'};
+    my $m=$json{'var'}{'botton_length'};
+    my $sn=$json{'simulation'}{'integer'}{'SN'}{'value'};
+    my $mcs=$json{'simulation'}{'integer'}{'mcs'}{'value'};
+    my $mz=$json{'simulation'}{'integer'}{'Mz'}{'value'};
     
     my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed);
     
@@ -417,18 +345,101 @@ sub gen_com{
     
     return sprintf("./%s %s %s ",$command1,$redirect1,$redirect2);
 }
+
 ###
 
+### Default Commandline Arguments
+my %par=(
+"help"		=> $FALSE,
+"read"		=> undef,
+"dryrun"	=> $FALSE,
+"gen"		=> $FALSE,
+"dump"		=> $FALSE,
+"dir"		=> undef,
+);
+###
 
-srcwd();
+### Getopt
 
-gen_json($par{'read_json'},\%json);
+GetOptions(
+'--help|?|h'=>\$par{'help'},
+'--read|r=s'=>\$par{'read'},
+'--dry-run|d'=>\$par{'dryrun'},
+'--gen|g'=>\$par{'gen'},
+'--dump|p' =>\$par{'dump'},
+'--dir|c=s' =>\$par{'dir'},
+) or die $!;
 
-my %hash=json2hash($par{'read_json'});
+sub arg_parse{
+    
+    if($par{'help'}==$TRUE){
+        print &show_help;
+        exit(0);
+    }
+    
+    if(defined($par{'dir'})){
+        srcwd($par{'dir'});
+    }else{
+        srcwd();
+    }
+    
+    if(defined($par{'read'})){
+        %json=json2hash($par{'read'});
+    }
+    
+    if($par{'gen'}==$TRUE){
+        gen_json("sample.json",\%json);
+        exit(0);
+    }
+    
+    hash_assign(\%json);
+    
+    if($par{'dump'}=$TRUE){
+        print("\nDump %json\n\n");
+        dump_hash(\%json);
+        print("\n\nDump %par\n\n");
+        dump_hash(\%par);
+    }
+    
+    
+}
+###
 
-hash_assign();
+### Twitter
+my $twtr;
 
+sub twitter_init{
+    
+    $twtr = Net::Twitter->new(
+    traits => ['API::RESTv1_1'],
+    consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
+    consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
+    access_token =>$json{'twitter'}{'token'}{'value'},
+    access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
+    SSL => $TRUE,
+    );
+}
 
+sub tweet{
+    my $tweet=shift; # Equal to $_[0]
+    my $update=$twtr->update($tweet);
+}
+
+sub timeline{
+    my $tl=$twtr->home_timeline();
+    return $tl;
+}
+###
+
+sub main{
+    
+    arg_parse();
+    twitter_init();
+    
+    
+}
+
+&main;
 
 
 
