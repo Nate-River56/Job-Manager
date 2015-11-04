@@ -1,3 +1,4 @@
+#! /usr/bin/env perl
 
 #
 # Copyright 2015 Nate-River56
@@ -11,8 +12,6 @@
 #
 
 
-#! /usr/bin/env perl
-
 #require '5.18.2';
 
 ### Encoding
@@ -24,6 +23,7 @@ use open ":utf8";
 ### Pedantic
 use warnings;
 use strict;
+no warnings 'redefine';
 ###
 
 ### Bool value
@@ -35,56 +35,143 @@ use constant FALSE=>0;
 use Time::HiRes ();
 use File::chdir;
 use Switch;
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat);
+use Net::Twitter;
+use JSON::XS;
+use Encode;
+###
+
+### Dumper module
+use Data::Dumper;
+{
+    package Data::Dumper;
+    sub qquote{return shift;}
+}
+$Data::Dumper::Useperl=TRUE;
 ###
 
 ### Getting hostname
-our $hostname='';
-$hostname=`hostname -s`;
-$hostname=~ s/[\r\n]//g;
+
 ###
 
 ### Default Commandline Arguments
 my %par=(
-"var" =>{
-    "J" =>'0.00',
-    "K" =>'0.00',
-    "therm_mcs" =>10000000,
-    "observe_mcs" =>10000000,
-    "bottom_length" =>40,
-    "seed" =>1,
-    "z_length" =>220,
-    "segment_number" =>200,
-    "grafting_point" =>50,
-    "process" =>2,
-    "interval" =>'0.05',
-    "start" =>'0.00',
-    "end" =>'1.00',
-},
-"str" =>{
-    "variable" =>'',
-},
-"bool" =>{
-    "gethelp" => FALSE,
-    "printpar" => FALSE,
-    "nonsol" => FALSE,
+	"gethelp" => FALSE,
+	"read_json"=>FALSE,
+    "print_yaml" => FALSE,
+    "print_json" => FALSE,
     "dryrun" => FALSE,
-    "correlation" => FALSE,
-},
-"twitter_keys" =>{
-    "consumer_key" => '',
-    "consumer_secret" => '',
-    "token" => '',
-    "token_secret" => '',
-},
-"environment"=>{
-    "program_name"=>'sol.out',
-    "hostname"=>$hostname,
-},
 );
-my @seed;
-my @bottom;
-my $gethelp=FALSE;
 ###
+
+### Default JSON value
+my %json=(
+	system=>{
+        process=>{
+            value=>2,
+            comment=>"実行する時のフォークする最大数",
+        },
+        program=>{
+            value=>'sol.s.out',
+            comment=>"プログラムのファイル名",
+        },
+        
+	},
+	twitter=>{
+        consumer_key=>{
+            value=>$ENV{'TWTR_CONS_KEY'},
+            comment=>"Twitter REST APIのコンシューマーキー",
+        },
+    	consumer_secret =>{
+            value=>$ENV{'TWTR_CONS_SEC'},
+            comment=>"",
+        },
+        token=>{
+            value=>$ENV{'TWTR_TOKEN_KEY'},
+            comment=>"",
+        },
+        token_secret=>{
+            value=>$ENV{'TWTR_TOKEN_SEC'},
+            comment=>"",
+        },
+	},
+	simulation=>{
+    	integer=>{
+        	SL=>{
+            	value=>200,
+            	comment=>"高分子のセグメント数",
+            },
+            SN=>{
+            	value=>50,
+                comment=>"高分子鎖の植え付け本数",
+            },
+            Mz=>{
+                value=>220,
+                comment=>"Z方向の系の長さ",
+            },
+            M=>{
+                value=>[
+                	20,
+                	30,
+                	40,
+                ],
+                comment=>"xy方向の系の長さ",
+            },
+            seed=>{
+                value=>[
+                	1,
+                	2,
+                	3,
+                ],
+                comment=>"乱数のseed",
+            },
+            mcs=>{
+                value=>10000000,
+                comment=>"Monte-Carlo-Step数",
+            },
+    	    
+    	},
+    	float=>{
+            J=>{
+                value=>0.00,
+                comment=>"高分子モノマーと溶媒の相互作用の強さ",
+            },
+            K=>{
+                value=>0.00,
+                comment=>"二成分溶媒間の相互作用の強さ",
+            },
+            start=>{
+                value=>0.00,
+                comment=>,"変化させるパラメータの初期値"
+            },
+            interval=>{
+                value=>0.05,
+                comment=>"変化させるパラメータの変化する値",
+            },
+            end=>{
+                value=>0.80,
+                comment=>"変化させるパラメータの終わりの値",
+            },
+    	},
+        bool=>{
+            nonsol=>{
+                value=>FALSE,
+                comment=>"溶媒のない条件でシミュレーションを行う.(true->1,false->0)",
+            },
+            correlation=>{
+                value=>FALSE,
+                comment=>"系の自己相関,相互相関について計算を行う.(true->1,false->0)",
+            },
+        },
+    	string=>{
+            choose_par=>{
+                value=>'J',
+                comment=>"変化させるパラメータ(J,K,M)",
+            },
+    	},
+	},
+);
+
 
 ### usage
 sub show_help {
@@ -94,22 +181,12 @@ Usage:
     perl $0 [options]
     
 Options:
-    --help                              :このスクリプトの詳細を表示
-    --process           [integer]       :物理コア数
-    --choose            [J or K]        :変化させるシミュレーションの変数
-    --start             [float]         :変数の始まる値
-    --end               [float]         :変数の終わる値
-    --interval          [float]         :変数の間隔
-    --seed              [integer:Array] :変化させるseedの配列
-    --bottom            [integer:Array] :変化させるbottomの長さの配列
-    --consumer-key      [string]        :Twitterのconsumer-key
-    --consumer-secret   [string]        :Twitterのconsumer-secret-key
-    --token             [string]        :Twitterのaccess-token-key
-    --token-secret      [string]        :Twitterのaccess-token-secret-key
-    --dry-run                           :試しに走らせてみる
-    --dump                              :入力された変数をYAML形式で出力,単体でdefaultのparameterの表示
-    --nonsol                            :溶媒の効果の存在の有無
-    --correlation                       :溶媒と高分子鎖の相関の計算の有無
+    --help       -h     :このスクリプトの詳細を表示
+    --read-json  -r		:JSON形式のファイルをパラメータとして入力する
+    --dry-run 	 -d     :試しに走らせてみる
+    --gen-json 	 -g		:JSON形式の入力用ファイルを作成する
+    --dump-yaml  -y     :入力された変数をYAML形式で出力,単体でdefaultのparameterの表示
+    --dump-json	 -j		:入力された変数をJSON形式で出力,単体でdefaultのparameterの表示
     
 EOF
     return $help_doc;
@@ -117,39 +194,17 @@ EOF
 ###
 
 ### Getopt
-use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat);
-
 GetOptions(
-'--process=i'=>\$par{'var'}{'process'},
-'--choose=s'=>\$par{'str'}{'variable'},
-'--start=f'=>\$par{'var'}{'start'},
-'--end=f'=>\$par{'var'}{'end'},
-'--interval=f'=>\$par{'var'}{'interval'},
-'--seed=i{1,}'=>\@seed,
-'--bottom=i{1,}'=>\@bottom,
-'--help|?'=>\$par{'bool'}{'gethelp'},
-'--dry-run'=>\$par{'bool'}{'dryrun'},
-'--dump'=>\$par{'bool'}{'printpar'},
-'--nonsol'=>\$par{'bool'}{'nonsol'},
-'--correlation'=>\$par{'bool'}{'correlation'},						
-'--consumer-key=s'=>\$par{'twitter_keys'}{'consumer_key'},
-'--consumer-key-secret=s'=>\$par{'twitter_keys'}{'consumer_secret'},
-'--token=s'=>\$par{'twitter_keys'}{'token'},
-'--token-secret=s'=>\$par{'twitter_keys'}{'token_secret'},
+#'--help|?|h'=>\$par{'gethelp'},
+	'--help|?|h'=>\&show_help,
+	'--read-json|r=s'=>\$par{'read_json'},
+	'--dry-run|d'=>\$par{'dryrun'},
+	'--dump-yaml|y'=>\$par{'print_yaml'},
+	'--dump-json|j'=>\$par{'print_json'},
 ) or die $!;
-
-if(@seed eq ""){
-    @seed=$par{'var'}{'seed'};
-}
-if(@bottom eq ""){
-    @bottom=$par{'var'}{'bottom_length'};
-}
-
 ###
 
 ### Twitter 
-use Net::Twitter;
-
 our $twtr = Net::Twitter->new(
 traits => ['API::RESTv1_1'],
 consumer_key => $par{'twitter_keys'}{'consumer_key'},
@@ -170,224 +225,208 @@ sub timeline{
 }
 ###
 
-### Dump
-use Data::Dumper;
-use YAML::XS;
-
-sub Dump_YAML_par{
-    print STDOUT YAML::XS::Dump %par;
+### Change directory
+sub srcwd{
+    use Cwd;
+    use FindBin;
+    
+    my $dir=shift||$FindBin::Bin;
+    
+    $CWD=$dir;
 }
 ###
+
+### Gen-JSON
+sub get_json{
+    my @hashref=shift;
+    
+    my $json=JSON::XS->new->pretty(1)->encode(\@hashref);
+    
+    return $json;
+}
+
+sub gen_json{
+    
+    my $file=shift||$par{'read_json'};
+    
+    push(my @hashref,shift);
+    
+    open my $FH, '+>',$file or die $!;
+    
+    print $FH &get_json(@hashref);
+    
+    close $FH;
+}
+###
+
+### Read
+sub get_content {
+    
+    my $file = shift;
+    
+    my $fh;
+    my $content;
+    
+    if(defined $file){
+    	open($fh, '<', $file) or die "Can't open file \"$file\": $!";
+        $content = do { local $/; <$fh> };
+        close $fh;
+    }
+    
+    return $content;
+}
+
+sub json2hash{
+    my $file = shift;
+    
+    my $json=get_content($file);
+    my $json_utf8=Encode::encode_utf8($json);
+    
+    my %hash = %{@{decode_json($json_utf8)}[0]};
+    
+    return %hash;
+}
+###
+
+### Dump
+sub dump_yaml{
+    use YAML::XS;
+    
+    my %par=shift;
+    print STDOUT YAML::XS::Dump %par;
+}
+
+sub dump_json{
+    my @hashref=shift;
+    print STDOUT get_json(@hashref);
+}
+
+sub dump_hash{
+    my @hashref=shift;
+    print STDOUT Dumper(%{$hashref[0]});
+}
+###
+
+### Assigning machine dependance value to hash
+sub hash_assign{
+    my @hashref=shift||\%json;
+    
+    my %hash=%{$hashref[0]};
+    
+    my $hostname='';
+    $hostname=`hostname -s`;
+    $hostname=~ s/[\r\n]//g;
+    
+    $hash{'system'}{'hostname'}{'value'}=$hostname;
+    $hash{'system'}{'hostname'}{'comment'}="実行マシンのホスト名";
+    
+    $hash{'system'}{'perl_stdout'}{'value'}="perl_".$hostname.".txt";
+    $hash{'system'}{'perl_stdout'}{'comment'}="このファイルの標準出力ログのファイル名";
+    
+    $hash{'system'}{'perl_stderr'}{'value'}="perl_".$hostname."_err.txt";
+    $hash{'system'}{'perl_stderr'}{'comment'}="このファイルの標準エラー出力ログのファイル名";
+    $hash{'system'}{'process'}{'value'}=&count_core;
+    $hash{'system'}{'cpuname'}{'value'}=&get_cpu_name;
+    
+}
+###
+
+sub count_core(){
+    
+    my $core_num;
+    my $osname="$^O";
+    
+    if($osname=~/linux/){
+        
+        my $core_per_socket=`lscpu|awk '(/ソケットあたりのコア数/){print}'|awk '{sub(":"," ");print \$2}'`;
+        
+        my $socket=`lscpu|awk '(/Socket/){print \$2}'`;
+        
+        $core_num=$core_per_socket*$socket;
+        
+        
+    }elsif($osname=~/darwin/){
+        
+        $core_num=`sysctl machdep.cpu.core_count|awk '{print \$2}'|tr -d '\\n'`;
+        
+    }else{
+        $core_num=-1;
+    }
+    
+    return $core_num;
+    
+}
+
+sub get_cpu_name(){
+    
+    my $cpu_name;
+    my $osname="$^O";
+    
+    if($osname=~/linux/){
+        $cpu_name=`cat /proc/cpuinfo |grep "model name"|uniq`;
+        $cpu_name=~/(?<=:)(.*)/;
+        $cpu_name=$1;
+        
+    }elsif($osname=~/darwin/){
+        $cpu_name=`sysctl -n machdep.cpu.brand_string`;
+        $cpu_name=~s/\n//g;
+    }
+    
+    return $cpu_name;
+    
+}
 
 ### Generate commandline
 sub gen_com{
     
-    my $setdir=shift;
-    my $command_par="--SL $par{'var'}{'segment_number'} --mcs $par{'var'}{'therm_mcs'} --Mz $par{'var'}{'z_length'} --SN $par{'var'}{'grafting_point'}";
-    my $add_par="";
+    my @hashref=shift;
+    my %hash=%{$hashref[0]};
     
-    if($par{'bool'}{'correlation'}==TRUE){
-        $add_par=$add_par." "."--correlation";
-    }
+    my $variable=shift;
+    my $bottom=shift;
+    my $seed=shift;
+    my $choose=$hash{'simulation'}{'string'}{'choose_par'}{'value'};
     
-    if($par{'bool'}{'nonsol'}==TRUE){
-        $add_par=$add_par." "."--nonsol";
+    
+    
+    my $exec=$hash{'environment'}{'executable'};
+    my $m=$par{'var'}{'botton_length'};
+    my $sn=$par{'var'}{'grafting_point'};
+    my $mcs=$par{'var'}{'observe_mcs'};
+    my $mz=$par{'var'}{'z_length'};
+    my $sl=$par{'var'}{'segment_number'};
+    my $J='0.00';
+    my $K='0.00';
+    
+    
+    if($choose eq 'J'){
+        $J=$variable;
+        $K='0.00';
+    }elsif($choose eq 'K'){
+        $J='0.00';
+        $K=$variable;
     }else{
-        switch($par{'str'}{'variable'}){
-            case 'J'	{$add_par=$add_par." "."--K $par{'var'}{'K'} --J"}
-            case 'K'	{$add_par=$add_par." "."--J $par{'var'}{'J'} --K"}
-            else 		{die $!}
-        } 
+        $J=0.00;
+        $K=0.00;
     }
     
-    return $setdir."/".$par{'environment'}{'program_name'}." ".$command_par.$add_par;
+    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed);
+    
+    my $redirect1=sprintf("1>sol_J%.2fK%.2fM%ds%d.dat",$J,$K,$bottom,$seed);
+    my $redirect2=sprintf("2>sol_J%.2fK%.2fM%ds%d_err.dat",$J,$K,$bottom,$seed);
+    
+    return sprintf("./%s %s %s ",$command1,$redirect1,$redirect2);
 }
 ###
 
-### ForkManager
-use Parallel::ForkManager;
-###
 
-### Dry-run
-sub test{
-    my $pm_dr = new Parallel::ForkManager($par{'var'}{'process'});
-    
-    $pm_dr->run_on_start(
-    sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data)=@_;
-        print STDERR "** started, pid: $pid, ";
-        my $data_str=localtime;
-        print STDERR $data_str ."\n";
-    }
-    );
-    
-    $pm_dr->run_on_finish(
-    sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data) = @_;
-        print STDERR "** just got out ".
-        "with PID $pid and exit code: $exit_code, ";
-        my $data_str=localtime;
-        print STDERR $data_str ."\n\n";
-    }
-    );
-    
-    print(STDERR "At $hostname, Let us begin test!!\n");
-    
-    my $command_line=&gen_com(".");
-    
-    foreach my $seed (@seed){
-        foreach my $bottom (@bottom){
-            if($par{'bool'}{'nonsol'}==TRUE){
-                if (my $pid=$pm_dr->start) {
-                    Time::HiRes::sleep(0.5);
-                    next;
-                }
-                
-                $command_line="$command_line --seed $seed --M $bottom";
-                $command_line="$command_line 1>nonsol_M${bottom}s${seed}.dat";
-                $command_line="$command_line 2>nonsol_M${bottom}s${seed}_err.dat";
-                
-                print(STDOUT "At $hostname, $command_line\n");
-                
-                sleep(3);
-                $pm_dr->finish;
-            }else{
-                for(my $iter=$par{'var'}{'start'};$iter<=$par{'var'}{'end'};$iter=sprintf("%.2f",$iter+$par{'var'}{'interval'})){
-                    if (my $pid=$pm_dr->start) {
-                        Time::HiRes::sleep(0.2);
-                        next;
-                    }
-                    
-                    $command_line="$command_line $iter --seed $seed --M $bottom";
-                    
-                    if($par{'str'}{'variable'} eq "J"){
-                        $command_line="$command_line 1>sol_J${iter}K$par{'var'}{'K'}M${bottom}s${seed}.dat";
-                        $command_line="$command_line 2>sol_J${iter}K$par{'var'}{'K'}M${bottom}s${seed}_err.dat";
-                    }elsif($par{'str'}{'variable'} eq "K"){
-                        $command_line="$command_line 1>sol_J$par{'var'}{'J'}K${iter}${bottom}s${seed}.dat";
-                        $command_line="$command_line 2>sol_J$par{'var'}{'J'}K${iter}${bottom}s${seed}_err.dat";
-                    }
-                    
-                    print(STDOUT "At $hostname, $command_line\n");
-                    
-                    sleep(3);
-                    $pm_dr->finish;
-                }
-            }
-            #Next Seed or M
-        }
-    }
-    
-    print(STDERR "Waiting Children.\n");
-    $pm_dr->wait_all_children;
-    
-    print(STDERR "All end test at $hostname!!\n");
-}
-###
+srcwd();
 
-### Running
-sub spork{
-    
-    print(STDERR "Start at $hostname.\n");
-    
-    my $pm = new Parallel::ForkManager($par{'var'}{'process'});
-    
-    $pm->run_on_start(
-    sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data)=@_;
-        my $tw="** At $hostname, started, pid: $pid, ";
-        my $data_str=localtime;
-        $tw=$tw.$data_str."\n";
-        tweet($tw);
-        print(STDERR $tw);
-    }
-    );
-    
-    $pm->run_on_finish(
-    sub {
-        my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data) = @_;
-        my $tw="** At $hostname, just got out ".
-        "with PID $pid and exit code: $exit_code, ";
-        my $data_str=localtime;
-        $tw=$tw.$data_str."\n\n";
-        tweet($tw);
-        print(STDERR $tw);
-        
-    }
-    );
-    
-    my $command_line=&gen_com(".");
-    
-    foreach my $seed (@seed){
-        foreach my $bottom (@bottom){
-            if($par{'bool'}{'nonsol'}==TRUE){
-                if (my $pid=$pm->start) {
-                    Time::HiRes::sleep(0.5);
-                    next;
-                }
-                
-                $command_line="$command_line --seed $seed --M $bottom";
-                $command_line="$command_line 1>nonsol_M${bottom}s${seed}.dat";
-                $command_line="$command_line 2>nonsol_M${bottom}s${seed}_err.dat";
-                
-                print(STDOUT "At $hostname, $command_line\n");
-                tweet("At $hostname, $command_line");
-                system($command_line);
-                
-                sleep(3);
-                $pm->finish;
-            }else{
-                for(my $iter=$par{'var'}{'start'};$iter<=$par{'var'}{'end'};$iter=sprintf("%.2f",$iter+$par{'var'}{'interval'})){
-                    if (my $pid=$pm->start) {
-                        Time::HiRes::sleep(0.2);
-                        next;
-                    }
-                    
-                    $command_line="$command_line $iter --seed $seed --M $bottom";
-                    
-                    if($par{'str'}{'variable'} eq "J"){
-                        $command_line="$command_line 1>sol_J${iter}K$par{'var'}{'K'}M${bottom}s${seed}.dat";
-                        $command_line="$command_line 2>sol_J${iter}K$par{'var'}{'K'}M${bottom}s${seed}_err.dat";
-                    }elsif($par{'str'}{'variable'} eq "K"){
-                        $command_line="$command_line 1>sol_J$par{'var'}{'J'}K${iter}${bottom}s${seed}.dat";
-                        $command_line="$command_line 2>sol_J$par{'var'}{'J'}K${iter}${bottom}s${seed}_err.dat";
-                    }
-                    
-                    print(STDOUT "At $hostname, $command_line\n");
-                    tweet("At $hostname, $command_line");
-                    system($command_line);
-                    
-                    sleep(3);
-                    $pm->finish;
-                }
-            }
-            #Next Seed or M
-        }
-    }
-    
-    print(STDERR "Waiting Children.\n");
-    $pm->wait_all_children;
-    
-    print(STDERR "All end at $hostname!!\n");
-}
-###
+gen_json($par{'read_json'},\%json);
 
-### Main
-sub main{
-    if($par{'bool'}{'printpar'}==TRUE){
-        &Dump_YAML_par;
-    }elsif($par{'bool'}{'gethelp'}==TRUE){
-        print &show_help;
-    }elsif($par{'bool'}{'dryrun'}==TRUE){
-        &test;
-    }else{
-        &spork;
-    }
-    exit(0);
-}
-###
+my %hash=json2hash($par{'read_json'});
 
-&main;
+hash_assign();
 
 
 
