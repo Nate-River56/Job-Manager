@@ -38,10 +38,13 @@ Readonly my $FALSE=>0;
 use Time::HiRes ();
 use File::chdir;
 use Switch;
-use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat);
+use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat bundling);
 use Net::Twitter;
 use JSON::XS;
 use Encode;
+use FindBin;
+use File::Tee qw(tee);
+use IO::File;
 ###
 
 ### Dumper module
@@ -56,121 +59,131 @@ $Data::Dumper::Deparse=$TRUE;
 
 ### Default JSON value
 my %json=(
-	system=>{
-        process=>{
-            value=>2,
-            comment=>"実行する時のフォークする最大数",
-        },
-        program=>{
-            value=>'sol.s.out',
-            comment=>"プログラムのファイル名",
+	'system'=>{
+        'program'=>{
+            'value'=>'sol.s.out',
+            'comment'=>"プログラムのファイル名",
         },
         
 	},
-	twitter=>{
-        consumer_key=>{
-            value=>$ENV{'TWTR_CONS_KEY'},
-            comment=>"Twitter REST API 1.1のconsumer key",
+	'twitter'=>{
+        'consumer_key'=>{
+            'value'=>$ENV{'TWTR_CONS_KEY'},
+            'comment'=>"Twitter REST API 1.1のconsumer key",
         },
-    	consumer_secret =>{
-            value=>$ENV{'TWTR_CONS_SEC'},
-            comment=>"Twitter REST API 1.1のconsumer secret",
+    	'consumer_secret' =>{
+            'value'=>$ENV{'TWTR_CONS_SEC'},
+            'comment'=>"Twitter REST API 1.1のconsumer secret",
         },
-        token=>{
-            value=>$ENV{'TWTR_TOKEN_KEY'},
-            comment=>"Twitter REST API 1.1のtoken",
+        'token'=>{
+            'value'=>$ENV{'TWTR_TOKEN_KEY'},
+            'comment'=>"Twitter REST API 1.1のtoken",
         },
-        token_secret=>{
-            value=>$ENV{'TWTR_TOKEN_SEC'},
-            comment=>"Twitter REST API 1.1のtoken secret",
+        'token_secret'=>{
+            'value'=>$ENV{'TWTR_TOKEN_SEC'},
+            'comment'=>"Twitter REST API 1.1のtoken secret",
         },
 	},
-	simulation=>{
-    	integer=>{
-        	SL=>{
-            	array=>[
+	'simulation'=>{
+    	'integer'=>{
+        	'SL'=>{
+            	'array'=>[
                 	100,
                 	200,
                 	300,
                 ],
-            	comment=>"高分子のセグメント数",
+            	'comment'=>"高分子のセグメント数",
             },
-            SN=>{
-            	value=>50,
-                comment=>"高分子鎖の植え付け本数",
+            'SN'=>{
+            	'value'=>50,
+                'comment'=>"高分子鎖の植え付け本数",
             },
-            Mz=>{
-                value=>220,
-                comment=>"Z方向の系の長さ",
-            },
-            M=>{
-                array=>[
+            'M'=>{
+                'array'=>[
                 	20,
                 	30,
                 	40,
                 ],
-                comment=>"xy方向の系の長さ",
+                'comment'=>"xy方向の系の長さ",
             },
-            seed=>{
-                array=>[
+            'Mz-L'=>{
+                'value'=>30,
+                'comment'=>"Z方向の系の長さ-高分子の長さ(空間的余裕分)",
+            },
+            'seed'=>{
+                'array'=>[
                 	1,
                 	2,
                 	3,
                 ],
-                comment=>"乱数のseed",
+                'comment'=>"乱数のseed",
             },
-            mcs=>{
-                value=>10000000,
-                comment=>"Monte-Carlo-Step数",
+            'mcs'=>{
+                'value'=>10000000,
+                'comment'=>"Monte-Carlo-Step数",
             },
     	    
     	},
-    	float=>{
-            J=>{
-                array=>[
+    	'float'=>{
+            'J'=>{
+                'array'=>[
                 	"0.00",
                 	"0.05",
                 	"0.10",
                 ],
-                comment=>"高分子モノマーと溶媒の相互作用の強さ",
+                'comment'=>"高分子モノマーと溶媒の相互作用の強さ",
             },
-            K=>{
-                array=>[
+            'K'=>{
+                'array'=>[
                 	"0.00",
                 	"0.05",
                 	"0.10",
                 ],
-                comment=>"二成分溶媒間の相互作用の強さ",
+                'comment'=>"二成分溶媒間の相互作用の強さ",
             },
     	},
-        bool=>{
-            nonsol=>{
-                value=>$FALSE,
-                comment=>"溶媒のない条件でシミュレーションを行う.(true->1,false->0)",
+        'bool'=>{
+            'nonsol'=>{
+                'value'=>$FALSE,
+                'comment'=>"溶媒のない条件でシミュレーションを行う.(true->1,false->0)",
             },
-            correlation=>{
-                value=>$FALSE,
-                comment=>"系の自己相関,相互相関について計算を行う.(true->1,false->0)",
+            'correlation'=>{
+                'value'=>$FALSE,
+                'comment'=>"系の自己相関,相互相関について計算を行う.(true->1,false->0)",
             },
         },
 	},
 );
 
-
 ### usage
 sub show_help {
+    
+    my $defhashref=shift;
+    my %defhash=%$defhashref;
+    
     my $help_doc=<<EOF;
     
 Usage:
     perl $0 [options]
     
-Options:
-    --help       -h	:このスクリプトの詳細を表示
-    --read       -r	:JSON形式のファイルをパラメータとして入力する
-    --dry-run 	 -d	:試しに走らせてみる
-    --gen        -g	:JSON形式の入力用ファイルを作成する
-    --dump       -p	:各種パラメーターをPerl Hash形式で出力
-    --dir        -c	:ディレクトリを設定する
+Options(Not Required):
+    
+    <ex. --long-option -short-option :Caption [Type(Default-value)]  >
+	
+    --help       -h	:このスクリプトの詳細を表示                      [Nil]
+    --read       -r	:JSON形式のファイルをパラメータとして入力する    [String]
+    --dry-run    -d	:試しに走らせてみる                              [Nil]
+    --gen        -g	:JSON形式の入力用ファイルを作成する              [String(\"$defhash{'gen'}\")]
+    --dump       -p     :パラメータをPerl Hash形式で出力する             [String(\"$defhash{'dump'}\")]
+    --dump-json  -j	:パラメータをJSON形式で出力する                  [String(\"$defhash{'dump-json'}\")]
+    --dir        -c	:ディレクトリを設定する                          [String(\"$FindBin::Bin\")]
+    --clean      -e     :デフォルトのファイルを削除する                  [Nil]
+    
+Reading Environment Value:
+    Option "--gen,-g"で入力用JSONファイルを生成するときに、以下の環境変数を参照します。
+    これらの値はファイルに直接書き入れるのであれば設定不要です。
+    
+    'TWTR_CONS_KEY','TWTR_CONS_SEC','TWTR_TOKEN_KEY','TWTR_TOKEN_SEC'
     
 EOF
     return $help_doc;
@@ -178,11 +191,10 @@ EOF
 ###
 
 ### Change directory
-sub srcwd{
+sub setwd{
     use Cwd;
-    use FindBin;
     
-    my $dir=shift||$FindBin::Bin;
+    my $dir=shift;
     
     $CWD=$dir;
 }
@@ -192,20 +204,19 @@ sub srcwd{
 sub gen_json{
     
     sub get_json{
-        my @hashref=shift;
+        my $hashref=shift;
         
-        my $json=JSON::XS->new->pretty(1)->encode(\@hashref);
+        my $json=JSON::XS->new->pretty(1)->encode($hashref);
         
         return $json;
     }
     
     my $file=shift;
-    
-    push(my @hashref,shift);
+    my $hashref=shift;
     
     open my $FH, '+>',$file or die $!;
     
-    print $FH &get_json(@hashref);
+    print $FH &get_json($hashref);
     
     close $FH;
 }
@@ -235,7 +246,7 @@ sub json2hash{
     my $json=get_content($file);
     my $json_utf8=Encode::encode_utf8($json);
     
-    my %hash = %{@{decode_json($json_utf8)}[0]};
+    my %hash = %{${decode_json($json_utf8)}};
     
     return %hash;
 }
@@ -243,20 +254,19 @@ sub json2hash{
 
 ### Dump
 sub dump_hash{
-    my @hashref=shift||\%json;
-    my %hash=%{$hashref[0]};
-    print STDOUT Dumper(@hashref);
+    my $hashref=shift||\%json;
+    my %hash=%$hashref;
+    return(Dumper($hashref));
 }
 ###
 
 ### Assigning machine dependance value to hash
 sub hash_assign{
-    my @hashref=shift||\%json;
+    my $hashref=shift;
     
-    my %hash=%{$hashref[0]};
+    my %hash=%$hashref;
     
-    my $hostname='';
-    $hostname=`hostname -s`;
+    my $hostname=`hostname -s`;
     $hostname=~ s/[\r\n]//g;
     
     $hash{'system'}{'hostname'}{'value'}=$hostname;
@@ -265,10 +275,14 @@ sub hash_assign{
     $hash{'system'}{'perl_stdout'}{'value'}="perl_".$hostname.".txt";
     $hash{'system'}{'perl_stdout'}{'comment'}="このファイルの標準出力ログのファイル名";
     
-    $hash{'system'}{'perl_stderr'}{'value'}="perl_".$hostname."_err.txt";
+    $hash{'system'}{'perl_stderr'}{'value'}="perl_".$hostname.".err.txt";
     $hash{'system'}{'perl_stderr'}{'comment'}="このファイルの標準エラー出力ログのファイル名";
-    $hash{'system'}{'process'}{'value'}=&count_core;
+    
+    $hash{'system'}{'process'}{'value'}=&count_core+0;
+    $hash{'system'}{'process'}{'comment'}="実行する時のフォークするプロセスの最大数";
+    
     $hash{'system'}{'cpuname'}{'value'}=&get_cpu_name;
+    $hash{'system'}{'cpuname'}{'comment'}="実行しているマシンに搭載されているCPU型番";
     
 }
 ###
@@ -291,7 +305,7 @@ sub count_core(){
     }elsif($osname=~/darwin/){
         $core_num=`sysctl machdep.cpu.core_count|awk '{print \$2}'|tr -d '\\n'`;
     }else{
-        $core_num=-1;
+        $core_num=undef;
     }
     
     return $core_num;
@@ -318,8 +332,107 @@ sub get_cpu_name(){
 }
 ###
 
-### Generate commandline
+### Getopt
+my $opt_dry_run=$FALSE;
+sub arg_parse{
+    
+    ### Default option
+    my %default=(
+    'gen'=>"sample.json",
+    'dump'=>"hash.txt",
+    'dump-json'=>"trace.json",
+    'dir'=>$FindBin::Bin,
+    );
+    ###
+	
+	my $hashref=shift;
+	my %par=%$hashref;
+	
+	setwd($FindBin::Bin);
+	
+	GetOptions(
+	'--help|?|h'		=> sub{print &show_help(\%default);exit(0)},
+	'--read|r=s'		=> sub{%par=json2hash($_[1])},
+	'--dry-run|d'		=> \$opt_dry_run,
+    '--gen|g:s'			=> sub{gen_json($_[1]||$default{$_[0]},\%par);exit(0)},
+	'--dump|p:s'		=> sub{hash_assign(\%par);print &dump_hash(\%par)},
+    '--dir|c:s'			=> sub{setwd($_[1]||$default{$_[0]})},
+    '--dump-json|j:s'	=> sub{hash_assign(\%par);gen_json($_[1]||$default{$_[0]},\%par)},
+    '--clean|e'           => sub{&clean(\%default);exit(0)},
+	) or die $!;
+	
+    
+}
+###
 
+### Twitter
+my $twtr=undef;
+
+sub twitter_init{
+    
+    my $twtr_usage=defined($json{'twitter'}{'consumer_key'}{'value'}) &&
+    defined($json{'twitter'}{'consumer_secret'}{'value'}) &&
+    defined($json{'twitter'}{'token'}{'value'}) &&
+    defined($json{'twitter'}{'token_secret'}{'value'});
+    
+    if($twtr_usage==$TRUE){
+        $twtr = Net::Twitter->new(
+        traits => ['API::RESTv1_1'],
+        consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
+        consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
+        access_token =>$json{'twitter'}{'token'}{'value'},
+        access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
+        SSL => $TRUE,
+        ) or die $!;
+        print STDERR "Now enable Twitter Option.\n"
+    }else{
+        print STDERR "Ignoring Twitter Option.\n";
+    }
+    return($twtr_usage);
+}
+
+sub tweet{
+    my $tweet=shift; # Equal to $_[0]
+    if(defined $twtr){
+        my $update=$twtr->update($tweet);
+    }
+}
+
+sub timeline{
+    if(defined $twtr){
+        my $tl=$twtr->home_timeline();
+        return $tl;
+    }
+}
+###
+
+sub handle_tee{
+
+    tee('STDOUT','>',$json{'system'}{'perl_stdout'}{'value'}) or die $!;
+    tee('STDERR','>',$json{'system'}{'perl_stderr'}{'value'}) or die $!;
+}
+
+sub clean{
+    
+    my $defhashref=shift;
+    my %defhash=%$defhashref;
+    
+    my $hostname=`hostname -s`;
+    $hostname=~ s/[\r\n]//g;
+    my $stdname="perl_".$hostname.".txt";
+    my $errname="perl_".$hostname.".err.txt";
+    
+    
+    my @del=($defhash{'gen'},$defhash{'dump'},$defhash{'dump-json'},
+             $stdname,$errname);
+    
+    foreach my $file (@del){
+        unlink $file or warn "Cannot delete $file  : $!\n";
+    }
+    
+}
+
+### Generate commandline
 sub gen_com{
     
     #my @hashref=shift;
@@ -336,107 +449,28 @@ sub gen_com{
     my $m=$json{'var'}{'botton_length'};
     my $sn=$json{'simulation'}{'integer'}{'SN'}{'value'};
     my $mcs=$json{'simulation'}{'integer'}{'mcs'}{'value'};
-    my $mz=$json{'simulation'}{'integer'}{'Mz'}{'value'};
+    my $mz=$json{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
     
     my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed);
     
-    my $redirect1=sprintf("1>sol_J%.2fK%.2fM%ds%d.dat",$J,$K,$bottom,$seed);
-    my $redirect2=sprintf("2>sol_J%.2fK%.2fM%ds%d_err.dat",$J,$K,$bottom,$seed);
+    my $redirect1=sprintf("1>sol_J%sK%sM%ds%d.dat",$J,$K,$bottom,$seed);
+    my $redirect2=sprintf("2>sol_J%sK%sM%ds%d_err.dat",$J,$K,$bottom,$seed);
     
     return sprintf("./%s %s %s ",$command1,$redirect1,$redirect2);
-}
-
-###
-
-### Default Commandline Arguments
-my %par=(
-"help"		=> $FALSE,
-"read"		=> undef,
-"dryrun"	=> $FALSE,
-"gen"		=> $FALSE,
-"dump"		=> $FALSE,
-"dir"		=> undef,
-);
-###
-
-### Getopt
-
-GetOptions(
-'--help|?|h'=>\$par{'help'},
-'--read|r=s'=>\$par{'read'},
-'--dry-run|d'=>\$par{'dryrun'},
-'--gen|g'=>\$par{'gen'},
-'--dump|p' =>\$par{'dump'},
-'--dir|c=s' =>\$par{'dir'},
-) or die $!;
-
-sub arg_parse{
-    
-    if($par{'help'}==$TRUE){
-        print &show_help;
-        exit(0);
-    }
-    
-    if(defined($par{'dir'})){
-        srcwd($par{'dir'});
-    }else{
-        srcwd();
-    }
-    
-    if(defined($par{'read'})){
-        %json=json2hash($par{'read'});
-    }
-    
-    if($par{'gen'}==$TRUE){
-        gen_json("sample.json",\%json);
-        exit(0);
-    }
-    
-    hash_assign(\%json);
-    
-    if($par{'dump'}=$TRUE){
-        print("\nDump %json\n\n");
-        dump_hash(\%json);
-        print("\n\nDump %par\n\n");
-        dump_hash(\%par);
-    }
-    
-    
-}
-###
-
-### Twitter
-my $twtr;
-
-sub twitter_init{
-    
-    $twtr = Net::Twitter->new(
-    traits => ['API::RESTv1_1'],
-    consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
-    consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
-    access_token =>$json{'twitter'}{'token'}{'value'},
-    access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
-    SSL => $TRUE,
-    );
-}
-
-sub tweet{
-    my $tweet=shift; # Equal to $_[0]
-    my $update=$twtr->update($tweet);
-}
-
-sub timeline{
-    my $tl=$twtr->home_timeline();
-    return $tl;
 }
 ###
 
 sub main{
     
-    arg_parse();
+    arg_parse(\%json);
+    &handle_tee;
     twitter_init();
     
+    print STDOUT gen_com(0.12,0.34,30,100,2)."\n";
     
+    print $opt_dry_run."\n\n";
+    
+    exit(0);
 }
 
 &main;
