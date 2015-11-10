@@ -53,3 +53,5 @@ Job-Manager/Job-Manager.xcodeproj/project.pbxproj
 
 *.json
 *.txt
+
+.Rhistory

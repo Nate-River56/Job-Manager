@@ -45,6 +45,7 @@ use Encode;
 use FindBin;
 use File::Tee qw(tee);
 use IO::File;
+use Acme::Comment type=>'C++', own_line => $FALSE, one_line => $TRUE;
 ###
 
 ### Dumper module
@@ -64,7 +65,10 @@ my %json=(
             'value'=>'sol.s.out',
             'comment'=>"プログラムのファイル名",
         },
-        
+        'twitter_use'=>{
+            'value'=>$FALSE,
+            'comment'=>'まだ追加したのみで実際には機能しないパラメータ',
+        },
 	},
 	'twitter'=>{
         'consumer_key'=>{
@@ -168,7 +172,7 @@ Usage:
     
 Options(Not Required):
     
-    <ex. --long-option -short-option :Caption [Type(Default-value)]  >
+    <ex. --long-option -short-option :Caption [Argument type(Default-value)]  >
 	
     --help       -h	:このスクリプトの詳細を表示                      [Nil]
     --read       -r	:JSON形式のファイルをパラメータとして入力する    [String]
@@ -178,6 +182,7 @@ Options(Not Required):
     --dump-json  -j	:パラメータをJSON形式で出力する                  [String(\"$defhash{'dump-json'}\")]
     --dir        -c	:ディレクトリを設定する                          [String(\"$FindBin::Bin\")]
     --clean      -e     :デフォルトのファイルを削除する                  [Nil]
+    --no-twitter -n     :Twitter機能を使用しない                         [Nil]
     
 Reading Environment Value:
     Option "--gen,-g"で入力用JSONファイルを生成するときに、以下の環境変数を参照します。
@@ -246,7 +251,7 @@ sub json2hash{
     my $json=get_content($file);
     my $json_utf8=Encode::encode_utf8($json);
     
-    my %hash = %{${decode_json($json_utf8)}};
+    my %hash = %{decode_json($json_utf8)};
     
     return %hash;
 }
@@ -254,7 +259,7 @@ sub json2hash{
 
 ### Dump
 sub dump_hash{
-    my $hashref=shift||\%json;
+    my $hashref=shift || \%json;
     my %hash=%$hashref;
     return(Dumper($hashref));
 }
@@ -334,6 +339,7 @@ sub get_cpu_name(){
 
 ### Getopt
 my $opt_dry_run=$FALSE;
+my $opt_no_twitter=$FALSE;
 sub arg_parse{
     
     ### Default option
@@ -350,18 +356,20 @@ sub arg_parse{
 	
 	setwd($FindBin::Bin);
 	
+    #$_[0] means long_name. $_[1] means argument.
 	GetOptions(
 	'--help|?|h'		=> sub{print &show_help(\%default);exit(0)},
 	'--read|r=s'		=> sub{%par=json2hash($_[1])},
 	'--dry-run|d'		=> \$opt_dry_run,
-    '--gen|g:s'			=> sub{gen_json($_[1]||$default{$_[0]},\%par);exit(0)},
+    '--gen|g:s'			=> sub{gen_json($_[1] || $default{$_[0]},\%par);exit(0)},
 	'--dump|p:s'		=> sub{hash_assign(\%par);print &dump_hash(\%par)},
-    '--dir|c:s'			=> sub{setwd($_[1]||$default{$_[0]})},
-    '--dump-json|j:s'	=> sub{hash_assign(\%par);gen_json($_[1]||$default{$_[0]},\%par)},
-    '--clean|e'           => sub{&clean(\%default);exit(0)},
+    '--dir|c:s'			=> sub{setwd($_[1] || $default{$_[0]})},
+    '--dump-json|j:s'	=> sub{hash_assign(\%par);gen_json($_[1] || $default{$_[0]},\%par)},
+    '--clean|e'         => sub{&clean(\%default);exit(0)},
+    '--log|l'           => sub{&handle_tee},
+    '--no-twitter|n'    => \$opt_no_twitter,
 	) or die $!;
 	
-    
 }
 ###
 
@@ -370,31 +378,36 @@ my $twtr=undef;
 
 sub twitter_init{
     
-    my $twtr_usage=defined($json{'twitter'}{'consumer_key'}{'value'}) &&
-    defined($json{'twitter'}{'consumer_secret'}{'value'}) &&
-    defined($json{'twitter'}{'token'}{'value'}) &&
-    defined($json{'twitter'}{'token_secret'}{'value'});
     
-    if($twtr_usage==$TRUE){
+    if($opt_dry_run==$FALSE or $opt_no_twitter==$FALSE){
+        print "Negotiating Twitter API Server\n";
         $twtr = Net::Twitter->new(
-        traits => ['API::RESTv1_1'],
-        consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
-        consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
-        access_token =>$json{'twitter'}{'token'}{'value'},
-        access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
-        SSL => $TRUE,
+            traits => ['API::RESTv1_1'],
+            consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
+            consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
+            access_token =>$json{'twitter'}{'token'}{'value'},
+            access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
+            SSL => $TRUE,
         ) or die $!;
-        print STDERR "Now enable Twitter Option.\n"
+        return($TRUE)
+        
     }else{
-        print STDERR "Ignoring Twitter Option.\n";
+        $twtr=undef;
+        print "Do not negotiate Twitter API Server.";
+        return($FALSE)
     }
-    return($twtr_usage);
+    
 }
 
 sub tweet{
     my $tweet=shift; # Equal to $_[0]
-    if(defined $twtr){
-        my $update=$twtr->update($tweet);
+    if(defined $twtr and $opt_no_twitter==$FALSE and $opt_dry_run==$FALSE){
+        print $opt_no_twitter."\n";
+        my $update=$twtr->update($tweet) or die $!."\n";
+        print("Tweet: ".$tweet)
+    }else{
+        print("Twitter Disabled.\n");
+        print("Print: ".$tweet."\n");
     }
 }
 
@@ -433,13 +446,13 @@ sub clean{
 }
 
 ### Generate commandline
-sub gen_com{
+sub gen_com{ #(J,K,bottom,sl,seed)
     
     #my @hashref=shift;
     #my %hash=%{$hashref[0]};
     
-    my $J=shift||'0.00';
-    my $K=shift||'0.00';
+    my $J=shift || '0.00';
+    my $K=shift || '0.00';
     
     my $bottom=shift;
     my $sl=shift;
@@ -451,7 +464,20 @@ sub gen_com{
     my $mcs=$json{'simulation'}{'integer'}{'mcs'}{'value'};
     my $mz=$json{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
     
-    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed);
+    my $nonsol="";
+    my $correlation="";
+    
+    /*
+    if($json{'bool'}{'nonsol'}{'value'}==$TRUE){
+       $nonsol="--nonsol";
+    }
+    
+    if($json{'bool'}{'correlation'}{'value'}==$TRUE){
+        $correlation="--correlation";
+    }
+    */
+    
+    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$nonsol,$correlation);
     
     my $redirect1=sprintf("1>sol_J%sK%sM%ds%d.dat",$J,$K,$bottom,$seed);
     my $redirect2=sprintf("2>sol_J%sK%sM%ds%d_err.dat",$J,$K,$bottom,$seed);
@@ -459,16 +485,99 @@ sub gen_com{
     return sprintf("./%s %s %s ",$command1,$redirect1,$redirect2);
 }
 ###
+sub task{
+    
+    use Parallel::ForkManager;
+    
+    
+    my $hostname="";
+    $hostname=$json{'system'}{'hostname'}{'value'};
+    
+    my $pm = new Parallel::ForkManager($json{'system'}{'process'}{'value'});
+    
+    $pm->run_on_start(
+        sub{
+            
+            my $date=localtime."";
+            
+            my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data)=@_;
+            my $tw="** At $hostname , started, pid: $pid, $date\n";
+            tweet($tw);
+        }
+    );
+    
+    $pm->run_on_finish(
+        sub {
+
+            my $date=localtime."";
+            
+            my ($pid, $exit_code, $ident, $exit_signal, $core_dump, $data) = @_;
+            my $tw="** At $hostname, just got out ".
+            "with PID $pid and exit code: $exit_code, $date\n\n";
+            tweet($tw);
+        }
+    );
+    
+    $pm->run_on_wait(
+        sub{
+        
+            my $date=localtime."";
+        
+        
+            print "waitin.\n";
+        
+        }
+    );
+    
+    
+    foreach   my $M  (@{$json{'simulation'}{'integer'}{'M'}{'array'}})    {
+        foreach   my $SL  (@{$json{'simulation'}{'integer'}{'SL'}{'array'}})  {
+            foreach   my $seed  (@{$json{'simulation'}{'integer'}{'seed'}{'array'}}) {
+                foreach   my $J  (@{$json{'simulation'}{'float'}{'J'}{'array'}})         {
+                    foreach   my $K  (@{$json{'simulation'}{'float'}{'K'}{'array'}})         {
+                        
+                        
+                        if (my $pid=$pm->start) {
+                            Time::HiRes::sleep(0.5);
+                            next;
+                        }
+                        
+                        my $line=gen_com($J,$K,$M,$SL,$seed)||"";
+                        
+                        if($opt_dry_run==$FALSE){
+                            system($line);
+                        }
+                        
+                        tweet("\"$line\" at $hostname, ".localtime);
+                        
+                        
+                        Time::HiRes::sleep(0.5);
+                        
+                        $pm->finish;
+                        
+                    }
+                }
+            }
+        }
+    }
+    
+    print("Waiting Children.\n");
+    $pm->wait_all_children;
+    
+    print("All end at $hostname.\n");
+    
+}
+###
+
 
 sub main{
     
+    
     arg_parse(\%json);
-    &handle_tee;
-    twitter_init();
+    hash_assign(\%json);
+    my $twtr_avail=twitter_init();
     
-    print STDOUT gen_com(0.12,0.34,30,100,2)."\n";
-    
-    print $opt_dry_run."\n\n";
+    &task;
     
     exit(0);
 }
