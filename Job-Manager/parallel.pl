@@ -393,6 +393,8 @@ sub arg_parse{
     '--license|L'         => sub{print &license;exit(0);},
 	) or die $!;
 	
+    
+    return %par;
 }
 ###
 
@@ -512,11 +514,13 @@ sub task{
     
     use Parallel::ForkManager;
     
+    my $hashref=shift;
+    my %par=%$hashref;
     
     my $hostname="";
-    $hostname=$json{'system'}{'hostname'}{'value'};
+    $hostname=$par{'system'}{'hostname'}{'value'};
     
-    my $pm = new Parallel::ForkManager($json{'system'}{'process'}{'value'});
+    my $pm = new Parallel::ForkManager($par{'system'}{'process'}{'value'});
     
     $pm->run_on_start(
         sub{
@@ -553,11 +557,11 @@ sub task{
     );
     
     
-    foreach   my $M  (@{$json{'simulation'}{'integer'}{'M'}{'array'}})    {
-        foreach   my $SL  (@{$json{'simulation'}{'integer'}{'SL'}{'array'}})  {
-            foreach   my $seed  (@{$json{'simulation'}{'integer'}{'seed'}{'array'}}) {
-                foreach   my $J  (@{$json{'simulation'}{'float'}{'J'}{'array'}})         {
-                    foreach   my $K  (@{$json{'simulation'}{'float'}{'K'}{'array'}})         {
+    foreach   my $M  (@{$par{'simulation'}{'integer'}{'M'}{'array'}})    {
+        foreach   my $SL  (@{$par{'simulation'}{'integer'}{'SL'}{'array'}})  {
+            foreach   my $seed  (@{$par{'simulation'}{'integer'}{'seed'}{'array'}}) {
+                foreach   my $J  (@{$par{'simulation'}{'float'}{'J'}{'array'}})         {
+                    foreach   my $K  (@{$par{'simulation'}{'float'}{'K'}{'array'}})         {
                         
                         
                         if (my $pid=$pm->start) {
@@ -597,11 +601,12 @@ sub task{
 sub main{
     
     
-    arg_parse(\%json);
+    my %par=arg_parse(\%json);
     hash_assign(\%json);
     my $twtr_avail=twitter_init();
     
-    &task;
+    
+    &task(\%par);
     
     exit(0);
 }
