@@ -601,10 +601,35 @@ sub task{
 sub main{
     
     
-    my %par=arg_parse(\%json);
-    hash_assign(\%json);
-    hash_assign(\%par);
+    my %par=arg_parse(\%json);    
+    
+    {
+        my $hostname=`hostname -s`;
+        $hostname=~ s/[\r\n]//g;
+        
+        $par{'system'}{'hostname'}{'value'}=$hostname;
+        $par{'system'}{'hostname'}{'comment'}="実行マシンのホスト名";
+        
+        $par{'system'}{'perl_stdout'}{'value'}="perl_".$hostname.".txt";
+        $par{'system'}{'perl_stdout'}{'comment'}="このファイルの標準出力ログのファイル名";
+        
+        $par{'system'}{'perl_stderr'}{'value'}="perl_".$hostname.".err.txt";
+        $par{'system'}{'perl_stderr'}{'comment'}="このファイルの標準エラー出力ログのファイル名";
+        
+        $par{'system'}{'process'}{'value'}=&count_core+0;
+        $par{'system'}{'process'}{'comment'}="実行する時のフォークするプロセスの最大数";
+        
+        $par{'system'}{'cpuname'}{'value'}=&get_cpu_name;
+        $par{'system'}{'cpuname'}{'comment'}="実行しているマシンに搭載されているCPU型番";
+        
+    }
+    
+    
+    
     my $twtr_avail=twitter_init();
+    
+    
+    
     
     
     &task(\%par);
