@@ -388,7 +388,7 @@ sub arg_parse{
     '--dir|c:s'			=> sub{setwd($_[1] || $default{$_[0]})},
     '--dump-json|j:s'	=> sub{hash_assign(\%par);gen_json($_[1] || $default{$_[0]},\%par)},
     '--clean|e'         => sub{&clean(\%default);exit(0)},
-    '--log|l'           => sub{&handle_tee},
+    '--log|l'           => sub{hash_assign(\%par);&handle_tee(\%par)},
     '--no-twitter|n'    => \$opt_no_twitter,
     '--license|L'         => sub{print &license;exit(0);},
 	) or die $!;
@@ -444,9 +444,11 @@ sub timeline{
 ###
 
 sub handle_tee{
-
-    tee('STDOUT','>',$json{'system'}{'perl_stdout'}{'value'}) or die $!;
-    tee('STDERR','>',$json{'system'}{'perl_stderr'}{'value'}) or die $!;
+    my $hashref=shift;
+    my %hash=%$hashref;
+    
+    tee('STDOUT','>',$hash{'system'}{'perl_stdout'}{'value'}) or die $!;
+    tee('STDERR','>',$hash{'system'}{'perl_stderr'}{'value'}) or die $!;
 }
 
 sub clean{
@@ -601,7 +603,7 @@ sub task{
 sub main{
     
     
-    my %par=arg_parse(\%json);    
+    my %par=arg_parse(\%json);
     
     {
         my $hostname=`hostname -s`;
