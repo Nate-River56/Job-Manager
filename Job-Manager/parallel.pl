@@ -62,12 +62,16 @@ $Data::Dumper::Deparse=$TRUE;
 my %json=(
 	'system'=>{
         'program'=>{
-            'value'=>'sol.s.out',
+            'value'=>'../bin/sol.s.out',
             'comment'=>"プログラムのファイル名",
         },
         'twitter_use'=>{
             'value'=>$FALSE,
             'comment'=>'まだ追加したのみで実際には機能しないパラメータ',
+        },
+        'sqlite_db'=>{
+            'value'=>"../sol.sqlite",
+            'comment'=>'SQLiteのデータベースの作成するor存在するPATH(すべてのnodeで共通にする)',
         },
 	},
 	'twitter'=>{
@@ -174,15 +178,17 @@ Options(Not Required):
     
     <ex. --long-option -short-option :Caption [Argument type(Default-value)]  >
 	
-    --help       -h	:このスクリプトの詳細を表示                      [Nil]
-    --read       -r	:JSON形式のファイルをパラメータとして入力する    [String]
-    --dry-run    -d	:試しに走らせてみる                              [Nil]
-    --gen        -g	:JSON形式の入力用ファイルを作成する              [String(\"$defhash{'gen'}\")]
-    --dump       -p     :パラメータをPerl Hash形式で出力する             [String(\"$defhash{'dump'}\")]
-    --dump-json  -j	:パラメータをJSON形式で出力する                  [String(\"$defhash{'dump-json'}\")]
-    --dir        -c	:ディレクトリを設定する                          [String(\"$FindBin::Bin\")]
-    --clean      -e     :デフォルトのファイルを削除する                  [Nil]
-    --no-twitter -n     :Twitter機能を使用しない                         [Nil]
+    --help       -h    : このスクリプトの詳細を表示                             [Nil]
+    --read       -r    : JSON形式のファイルをパラメータとして入力する           [String]
+    --dry-run    -d    : 試しに走らせてみる                                     [Nil]
+    --gen        -g    : JSON形式の入力用ファイルを作成する                     [String(\"$defhash{'gen'}\")]
+    --dump       -p    : パラメータをPerl Hash形式で出力する                    [String(\"$defhash{'dump'}\")]
+    --dump-json  -j    : パラメータをJSON形式で出力する                         [String(\"$defhash{'dump-json'}\")]
+    --dir        -c    : ディレクトリを設定する                                 [String(\"$FindBin::Bin\")]
+    --clean      -e    : デフォルトのファイルを削除する                         [Nil]
+    --no-twitter -n    : Twitter機能を使用しない                                [Nil]
+    --log        -l    : Printing log ,but stdio/stderr does not suppressed.    [Nil]
+    --license    -L    : ライセンスを表示する, Printing License of this code.   [Nil]
     
 Reading Environment Value:
     Option "--gen,-g"で入力用JSONファイルを生成するときに、以下の環境変数を参照します。
@@ -194,6 +200,22 @@ EOF
     return $help_doc;
 }
 ###
+
+sub license{
+    
+    my $license_doc=<<EOF;
+
+ Copyright 2015 Nate-River56
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+ http://www.apache.org/licenses/LICENSE-2.0
+    
+EOF
+    return $license_doc;
+}
 
 ### Change directory
 sub setwd{
@@ -368,6 +390,7 @@ sub arg_parse{
     '--clean|e'         => sub{&clean(\%default);exit(0)},
     '--log|l'           => sub{&handle_tee},
     '--no-twitter|n'    => \$opt_no_twitter,
+    '--license|L'         => sub{print &license;exit(0);},
 	) or die $!;
 	
 }
@@ -463,6 +486,7 @@ sub gen_com{ #(J,K,bottom,sl,seed)
     my $sn=$json{'simulation'}{'integer'}{'SN'}{'value'};
     my $mcs=$json{'simulation'}{'integer'}{'mcs'}{'value'};
     my $mz=$json{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
+    my $db=$json{'system'}{'sqlite_db'}{'value'};
     
     my $nonsol="";
     my $correlation="";
@@ -477,7 +501,7 @@ sub gen_com{ #(J,K,bottom,sl,seed)
     }
     */
     
-    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$nonsol,$correlation);
+    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d --db %s %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$db,$nonsol,$correlation);
     
     my $redirect1=sprintf("1>sol_J%sK%sM%ds%d.dat",$J,$K,$bottom,$seed);
     my $redirect2=sprintf("2>sol_J%sK%sM%ds%d_err.dat",$J,$K,$bottom,$seed);
