@@ -55,3 +55,7 @@ Job-Manager/Job-Manager.xcodeproj/project.pbxproj
 *.txt
 
 .Rhistory
+*.tar.xz
+*.tar.gz
+*.tar.bz2
+

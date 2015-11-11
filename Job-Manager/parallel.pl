@@ -425,7 +425,6 @@ sub twitter_init{
 sub tweet{
     my $tweet=shift; # Equal to $_[0]
     if(defined $twtr and $opt_no_twitter==$FALSE and $opt_dry_run==$FALSE){
-        print $opt_no_twitter."\n";
         my $update=$twtr->update($tweet) or die $!."\n";
         print("Tweet: ".$tweet)
     }else{
@@ -568,12 +567,13 @@ sub task{
                         
                         my $line=gen_com($J,$K,$M,$SL,$seed)||"";
                         
+                        print("Execute: ".$line."\n");
                         if($opt_dry_run==$FALSE){
                             system($line);
                         }
                         
-                        tweet("\"$line\" at $hostname, ".localtime);
                         
+                        tweet("Finished Job at $hostname, ".localtime);
                         
                         Time::HiRes::sleep(0.5);
                         
