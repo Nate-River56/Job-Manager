@@ -603,6 +603,7 @@ sub main{
     
     my %par=arg_parse(\%json);
     hash_assign(\%json);
+    hash_assign(\%par);
     my $twtr_avail=twitter_init();
     
     
