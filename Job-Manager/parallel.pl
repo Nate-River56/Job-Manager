@@ -405,7 +405,7 @@ sub twitter_init{
     
     
     if($opt_dry_run==$FALSE or $opt_no_twitter==$FALSE){
-        print(STDERR,"Negotiating Twitter API Server\n");
+        print(STDERR "Negotiating Twitter API Server\n");
         $twtr = Net::Twitter->new(
             traits => ['API::RESTv1_1'],
             consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
@@ -418,7 +418,7 @@ sub twitter_init{
         
     }else{
         $twtr=undef;
-        print(STDERR, "Do not negotiate Twitter API Server.");
+        print(STDERR "Do not negotiate Twitter API Server.");
         return($FALSE)
     }
     
@@ -428,10 +428,10 @@ sub tweet{
     my $tweet=shift; # Equal to $_[0]
     if(defined $twtr and $opt_no_twitter==$FALSE and $opt_dry_run==$FALSE){
         my $update=$twtr->update($tweet) or die $!."\n";
-        print(STDOUT,"Tweet: ".$tweet)
+        print(STDOUT "Tweet: ".$tweet)
     }else{
-        print(STDOUT,"Twitter Disabled.\n");
-        print(STDOUT,"Print: ".$tweet."\n");
+        print(STDOUT "Twitter Disabled.\n");
+        print(STDOUT "Print: ".$tweet."\n");
     }
 }
 
@@ -573,7 +573,7 @@ sub task{
                         
                         my $line=gen_com(\%par,$J,$K,$M,$SL,$seed)||"";
                         
-                        print(STDOUT,"Execute: ".$line."\n");
+                        print(STDOUT "Execute: ".$line."\n");
                         if($opt_dry_run==$FALSE){
                             system($line);
                         }
@@ -591,10 +591,10 @@ sub task{
         }
     }
     
-    print(STDOUT,"Waiting Children.\n");
+    print(STDOUT "Waiting Children.\n");
     $pm->wait_all_children;
     
-    print(STDOUT,"All end at $hostname.\n");
+    print(STDOUT "All end at $hostname.\n");
     
 }
 ###
