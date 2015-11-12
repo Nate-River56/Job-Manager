@@ -474,8 +474,8 @@ sub clean{
 ### Generate commandline
 sub gen_com{ #(J,K,bottom,sl,seed)
     
-    #my @hashref=shift;
-    #my %hash=%{$hashref[0]};
+    my $hashref=shift;
+    my %par=%$hashref;
     
     my $J=shift || '0.00';
     my $K=shift || '0.00';
@@ -484,25 +484,25 @@ sub gen_com{ #(J,K,bottom,sl,seed)
     my $sl=shift;
     my $seed=shift;
     
-    my $exec=$json{'system'}{'program'}{'value'};
-    my $m=$json{'var'}{'botton_length'};
-    my $sn=$json{'simulation'}{'integer'}{'SN'}{'value'};
-    my $mcs=$json{'simulation'}{'integer'}{'mcs'}{'value'};
-    my $mz=$json{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
-    my $db=$json{'system'}{'sqlite_db'}{'value'};
+    my $exec=$par{'system'}{'program'}{'value'};
+    my $m=$par{'var'}{'botton_length'};
+    my $sn=$par{'simulation'}{'integer'}{'SN'}{'value'};
+    my $mcs=$par{'simulation'}{'integer'}{'mcs'}{'value'};
+    my $mz=$par{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
+    my $db=$par{'system'}{'sqlite_db'}{'value'};
     
     my $nonsol="";
     my $correlation="";
     
-    /*
-    if($json{'bool'}{'nonsol'}{'value'}==$TRUE){
+    
+    if($par{'bool'}{'nonsol'}{'value'}==$TRUE){
        $nonsol="--nonsol";
     }
     
-    if($json{'bool'}{'correlation'}{'value'}==$TRUE){
+    if($par{'bool'}{'correlation'}{'value'}==$TRUE){
         $correlation="--correlation";
     }
-    */
+    
     
     my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d --db %s %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$db,$nonsol,$correlation);
     
@@ -571,7 +571,7 @@ sub task{
                             next;
                         }
                         
-                        my $line=gen_com($J,$K,$M,$SL,$seed)||"";
+                        my $line=gen_com(\%par,$J,$K,$M,$SL,$seed)||"";
                         
                         print("Execute: ".$line."\n");
                         if($opt_dry_run==$FALSE){
@@ -629,9 +629,6 @@ sub main{
     
     
     my $twtr_avail=twitter_init();
-    
-    
-    
     
     
     &task(\%par);
