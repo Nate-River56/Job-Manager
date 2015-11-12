@@ -151,13 +151,9 @@ my %json=(
             },
     	},
         'bool'=>{
-            'nonsol'=>{
-                'value'=>$FALSE,
-                'comment'=>"溶媒のない条件でシミュレーションを行う.(true->1,false->0)",
-            },
             'correlation'=>{
-                'value'=>$FALSE,
-                'comment'=>"系の自己相関,相互相関について計算を行う.(true->1,false->0)",
+                'value'=>"false",
+                'comment'=>"系の自己相関,相互相関について計算を行う.(\"true\" or \"false\")",
             },
         },
 	},
@@ -493,21 +489,25 @@ sub gen_com{ #(J,K,bottom,sl,seed)
     
     my $nonsol=" ";
     my $correlation=" ";
+    my $command1="";
     
-    
-    if($par{'bool'}{'nonsol'}{'value'}==$TRUE){
-       $nonsol="--nonsol";
-    }
-    
-    if($par{'bool'}{'correlation'}{'value'}==$TRUE){
+    if($par{'bool'}{'correlation'}{'value'} eq "true"){
         $correlation="--correlation";
+    }else{
+        $correlation=" ";
+    }
+    
+    if($J==0 and $K==0){
+       $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --nonsol --seed %d --db %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$seed,$db,$correlation);
+        $J='0.00';
+        $K='0.00';
+    }else{
+       $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %s --K %s --seed %d --db %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$db,$correlation);
     }
     
     
-    my $command1=sprintf("%s --M %d --SN %d --mcs %d --Mz %d --SL %d --J %f --K %f --seed %d --db %s %s %s",$exec,$bottom,$sn,$mcs,$mz,$sl,$J,$K,$seed,$db,$nonsol,$correlation);
-    
-    my $redirect1=sprintf("1>sol_J%sK%sM%ds%d.dat",$J,$K,$bottom,$seed);
-    my $redirect2=sprintf("2>sol_J%sK%sM%ds%d_err.dat",$J,$K,$bottom,$seed);
+    my $redirect1=sprintf("1>sol_J%sK%sM%dL%ss%d.dat",$J,$K,$bottom,$sl,$seed);
+    my $redirect2=sprintf("2>sol_J%sK%sM%dL%ss%d_err.dat",$J,$K,$bottom,$sl,$seed);
     
     return sprintf("./%s %s %s ",$command1,$redirect1,$redirect2);
 }
