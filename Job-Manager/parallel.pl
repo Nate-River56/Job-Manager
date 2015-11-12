@@ -380,7 +380,7 @@ sub arg_parse{
 	
     #$_[0] means long_name. $_[1] means argument.
 	GetOptions(
-	'--help|?|h'		=> sub{print &show_help(\%default);exit(0)},
+	'--help|?|h'		=> sub{print STDERR &show_help(\%default);exit(0)},
 	'--read|r=s'		=> sub{%par=json2hash($_[1])},
 	'--dry-run|d'		=> \$opt_dry_run,
     '--gen|g:s'			=> sub{gen_json($_[1] || $default{$_[0]},\%par);exit(0)},
@@ -390,7 +390,7 @@ sub arg_parse{
     '--clean|e'         => sub{&clean(\%default);exit(0)},
     '--log|l'           => sub{hash_assign(\%par);&handle_tee(\%par)},
     '--no-twitter|n'    => \$opt_no_twitter,
-    '--license|L'         => sub{print &license;exit(0);},
+    '--license|L'         => sub{print STDERR &license;exit(0);},
 	) or die $!;
 	
     
@@ -405,7 +405,7 @@ sub twitter_init{
     
     
     if($opt_dry_run==$FALSE or $opt_no_twitter==$FALSE){
-        print "Negotiating Twitter API Server\n";
+        print(STDERR,"Negotiating Twitter API Server\n");
         $twtr = Net::Twitter->new(
             traits => ['API::RESTv1_1'],
             consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
@@ -418,7 +418,7 @@ sub twitter_init{
         
     }else{
         $twtr=undef;
-        print "Do not negotiate Twitter API Server.";
+        print(STDERR, "Do not negotiate Twitter API Server.");
         return($FALSE)
     }
     
@@ -428,10 +428,10 @@ sub tweet{
     my $tweet=shift; # Equal to $_[0]
     if(defined $twtr and $opt_no_twitter==$FALSE and $opt_dry_run==$FALSE){
         my $update=$twtr->update($tweet) or die $!."\n";
-        print("Tweet: ".$tweet)
+        print(STDOUT,"Tweet: ".$tweet)
     }else{
-        print("Twitter Disabled.\n");
-        print("Print: ".$tweet."\n");
+        print(STDOUT,"Twitter Disabled.\n");
+        print(STDOUT,"Print: ".$tweet."\n");
     }
 }
 
@@ -553,7 +553,7 @@ sub task{
             my $date=localtime."";
         
         
-            print "waitin.\n";
+            print STDOUT "waitin.\n";
         
         }
     );
@@ -573,7 +573,7 @@ sub task{
                         
                         my $line=gen_com(\%par,$J,$K,$M,$SL,$seed)||"";
                         
-                        print("Execute: ".$line."\n");
+                        print(STDOUT,"Execute: ".$line."\n");
                         if($opt_dry_run==$FALSE){
                             system($line);
                         }
@@ -591,10 +591,10 @@ sub task{
         }
     }
     
-    print("Waiting Children.\n");
+    print(STDOUT,"Waiting Children.\n");
     $pm->wait_all_children;
     
-    print("All end at $hostname.\n");
+    print(STDOUT,"All end at $hostname.\n");
     
 }
 ###
