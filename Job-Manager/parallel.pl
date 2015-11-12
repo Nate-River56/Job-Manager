@@ -491,8 +491,8 @@ sub gen_com{ #(J,K,bottom,sl,seed)
     my $mz=$par{'simulation'}{'integer'}{'Mz-L'}{'value'}+$sl;
     my $db=$par{'system'}{'sqlite_db'}{'value'};
     
-    my $nonsol="";
-    my $correlation="";
+    my $nonsol=" ";
+    my $correlation=" ";
     
     
     if($par{'bool'}{'nonsol'}{'value'}==$TRUE){
