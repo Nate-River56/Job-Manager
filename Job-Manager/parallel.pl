@@ -39,7 +39,6 @@ use Time::HiRes ();
 use File::chdir;
 use Switch;
 use Getopt::Long qw(:config posix_default no_ignore_case gnu_compat bundling);
-use Net::Twitter;
 use JSON::XS;
 use Encode;
 use FindBin;
@@ -397,46 +396,12 @@ sub arg_parse{
 ### Twitter
 my $twtr=undef;
 
-sub twitter_init{
-    
-    
-    if($opt_dry_run==$FALSE or $opt_no_twitter==$FALSE){
-        print(STDERR "Negotiating Twitter API Server\n");
-        $twtr = Net::Twitter->new(
-            traits => ['API::RESTv1_1'],
-            consumer_key => $json{'twitter'}{'consumer_key'}{'value'},
-            consumer_secret => $json{'twitter'}{'consumer_secret'}{'value'},
-            access_token =>$json{'twitter'}{'token'}{'value'},
-            access_token_secret =>$json{'twitter'}{'token_secret'}{'value'},
-            SSL => $TRUE,
-        ) or die $!;
-        return($TRUE)
-        
-    }else{
-        $twtr=undef;
-        print(STDERR "Do not negotiate Twitter API Server.");
-        return($FALSE)
-    }
-    
-}
-
 sub tweet{
     my $tweet=shift; # Equal to $_[0]
-    if(defined $twtr and $opt_no_twitter==$FALSE and $opt_dry_run==$FALSE){
-        my $update=$twtr->update($tweet) or die $!."\n";
-        print(STDOUT "Tweet: ".$tweet)
-    }else{
-        print(STDOUT "Twitter Disabled.\n");
-        print(STDOUT "Print: ".$tweet."\n");
-    }
+    
+    print(STDOUT "Print: ".$tweet."\n");
 }
 
-sub timeline{
-    if(defined $twtr){
-        my $tl=$twtr->home_timeline();
-        return $tl;
-    }
-}
 ###
 
 sub handle_tee{
@@ -626,9 +591,6 @@ sub main{
         
     }
     
-    
-    
-    my $twtr_avail=twitter_init();
     
     
     &task(\%par);
